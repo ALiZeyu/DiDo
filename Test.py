@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 import codecs
-import json
+# import json
 import re
 import sys
 import os
 reload(sys)
 sys.setdefaultencoding('utf-8')
+
+import logging
+logging.basicConfig(filename='data/log.log', level=logging.DEBUG)
+
 
 
 def read_file(path):
@@ -51,7 +55,8 @@ def first_filter(in_path, out_path, exception_path):
             continue
         my_str = myarray[6]+'\t|\t'
         # 同时含有输入和输出
-        if len(myarray[8].strip())>0 and myarray[9].strip() != '--':
+        sp = re.compile('【TTS】\s*</br>')
+        if len(myarray[8].strip()) > 0 and myarray[9].strip() != '--'and not sp.match(myarray[9].strip()):
             my_str += myarray[8]+'\t|\t'+myarray[9]+'\t|\t1'
             nomal_list.append(my_str)
             continue
@@ -66,7 +71,7 @@ def first_filter(in_path, out_path, exception_path):
         #     json_str = json_str[p:]
         # json_str = json_str[1:-1]
         # 含有\字符无法处理
-        json_str = json_str.replace('\\','')
+        json_str = json_str.replace('\\', '')
         json_str = json_str.replace('""', '"')
         # print in_path+json_str
         # try:
@@ -94,6 +99,8 @@ def first_filter(in_path, out_path, exception_path):
     write_file(out_path, nomal_list)
     print all_num
     print len(nomal_list)
+    logging.info(all_num)
+    logging.info(len(nomal_list))
     write_file(exception_path, exception_list)
 
 
@@ -312,7 +319,9 @@ def sec_filter(in_path, out_path, exception_path):
         out_list.append(k+ '\t' +str(v))
     write_file(out_path, out_list)
     print num
-    #write_file(exception_path, exception_list)
+    logging.info(num)
+    # write_file(exception_path, exception_list)
+
 
 # old version of sec
 def sec_sec_filter(in_path, out_path, exception_path):
@@ -458,6 +467,7 @@ def pipeline(path):
         for file_name in file_list:
             prefix = file_name[: -4]
             print prefix
+            logging.info(prefix)
             first_filter(path+'/'+dir_name+'/'+file_name, 'data/first/'+prefix+'_first.txt', 'data/first/'+prefix+'_exception.txt')
             sec_filter('data/first/'+prefix+'_first.txt', local_path+'/response_'+prefix+'.txt', 'data/second/exception_'+ prefix +'.txt')
 
@@ -499,6 +509,33 @@ def get_list_tag(path):
         print tag
     # print list_list
 
+# 获取hdfs上的数据，是由soh分割，改成\t分割并写入文件
+def get_hdfs_data(in_path, out_path):
+    data = read_file(in_path)
+    out_list = []
+    for sen in data:
+        my_array = sen.split('\x01')
+        new_sen = my_array[0]+'\t'+my_array[1]+'\t'+my_array[2]
+        out_list.append(new_sen)
+    write_file(out_path, out_list)
+
+
+def modify_hdfs_data_format(in_path, out_path):
+    countmap = dict()
+    out_list = []
+    data = read_file(in_path)
+    i = 0
+    for sentence in data:
+        my_array = sentence.split('\t')
+        if len(my_array) != 3:
+            print sentence
+            continue
+        new_str = my_array[2] + '\t' + my_array[0] + '\t' + my_array[1]
+        countmap[new_str] = countmap[new_str] + 1 if new_str in countmap else 1
+    for k, v in zip(countmap.iterkeys(), countmap.itervalues()):
+        out_list.append(k + '\t' + str(v))
+    write_file(out_path,out_list)
+
 
 if __name__ == '__main__':
     # # data = read_file('C:/Users/lizeyu/Downloads/2016-09-23_2016-09-15_2016-09-15.txt')
@@ -519,7 +556,8 @@ if __name__ == '__main__':
     # first_filter('D:/dingdong/data_20161022/2016-10-22_2016-10-21_2016-10-21.txt', 'data/normal.txt', 'data/exception.txt')
     # count_response('data/normal.txt')
     # sec_filter('data/normal.txt', 'data/output.txt', 'data/sec_exception.txt')
-    pipeline('D:/dingdong/all_data')
-    # get_list_tag('data/right_format')
-    # sec_filter('E:/pyworkspace/Test/data/first/2016-10-02_2016-09-03_2016-09-03_first.txt', 'data/watch.txt', '')
+    # pipeline('D:/dingdong/all_data')
+    # logging.info('test\n')
+    modify_hdfs_data_format('D:/dingdong/log_fake_response/hdfs_data/hdfs_extraction.txt',
+                            'D:/dingdong/log_fake_response/hdfs_data/hdfs_modify.txt')
 
